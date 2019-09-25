@@ -1,6 +1,11 @@
 package com.iridium.androidcamera;
 
+// Not necessary
+/*
+import android.Manifest;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
@@ -12,22 +17,30 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
+
+import com.bumptech.glide.Glide;
 
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_IMAGE_CAPTURE = 1;
     private static final String TAG = "CAMERA_APP";
-    private Uri myImageUri;
     private ImageView imageView;
     private Button captureBtn;
     private String currentPath;
-    private Bitmap photoBitmap;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,70 +49,127 @@ public class MainActivity extends AppCompatActivity {
 
         imageView = findViewById(R.id.imageView);
         captureBtn = findViewById(R.id.capture_btn);
-        captureBtn.setOnClickListener(new View.OnClickListener()
-        {
+        captureBtn.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View view) {
-                //call to start camera intent
-                capturePhoto();
+            public void onClick(View view)
+            {
+                Log.d(TAG,"CAPTURE BUTTON WAS CLIKED");
+
+                // checks if camera permissions have been granted
+                if (ContextCompat.checkSelfPermission(MainActivity.this,
+                        Manifest.permission.CAMERA)
+                        != PackageManager.PERMISSION_GRANTED)
+                {
+
+                    Log.d(TAG,"PERMISSIONS WERE NOT GRANTED");
+
+                    // Permission is not granted
+
+                    if (ActivityCompat.shouldShowRequestPermissionRationale(MainActivity.this,
+                            Manifest.permission.CAMERA)) {
+
+                        //tell user why camera not working
+                       Toast.makeText(getApplicationContext(),"Access to camera denied",Toast.LENGTH_LONG).show();
+
+                    } else
+                        {
+                        // No explanation needed; request the permission
+                        ActivityCompat.requestPermissions(MainActivity.this,
+                                new String[]{Manifest.permission.CAMERA},
+                                REQUEST_IMAGE_CAPTURE);
+
+                    }
+                } else {
+
+                    Log.d(TAG,"PROCEED TO LAUCH CAMERA INTENT");
+                    // Permission has already been granted
+                    capturePhoto();
+                }
+
             }
-        });
+        }
+        );
 
     }
 
     private void capturePhoto()
     {
-        Toast.makeText(this,"Take Photo",Toast.LENGTH_SHORT).show();
+        Log.d(TAG,"START INTENT CAPTURE IMAGE");
         Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        if (cameraIntent.resolveActivity(getPackageManager()) != null) {
+        if (cameraIntent.resolveActivity(getPackageManager()) != null)
+        {
+
             // Create the File where the photo should go
             File photoFile = null;
-            try {
+
+            try
+            {
                 photoFile = createImageFile();
-            } catch (IOException ex) {
+            } catch (IOException ex)
+            {
+
                 // Error occurred while creating the File
                 Log.i(TAG, "IOException");
+                Log.d(TAG,"STORAGE FILE PATH COULD NOT BE CREATED");
             }
+
             // Continue only if the File was successfully created
-            if (photoFile != null) {
-                cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(photoFile));
-                startActivityForResult(cameraIntent, REQUEST_IMAGE_CAPTURE);
+            if (photoFile != null)
+            {
+
+
+                Uri photoURI = FileProvider.getUriForFile(getApplicationContext(),getPackageName()+".provider", photoFile);
+                Log.d(TAG,"PHOTO URI CREATED");
+
+                cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT,photoURI);
+                Log.d(TAG,"EXTRAS ADDED TO INTENT");
+
+                startActivityForResult(cameraIntent,REQUEST_IMAGE_CAPTURE);
+                Log.d(TAG,"CAMERA INTENT LAUNCHED");
+
             }
         }
-    }
-
-    private File createImageFile() throws IOException {
-        // Create an image file name
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        String imageFileName = "JPEG_" + timeStamp + "_";
-        File storageDir = Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_PICTURES);
-        File image = File.createTempFile(
-                imageFileName,  // prefix
-                ".jpg",         // suffix
-                storageDir      // directory
-        );
-
-        // Save a file: path for use with ACTION_VIEW intents
-        currentPath = "file:" + image.getAbsolutePath();
-        return image;
     }
 
     @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data)
+    {
         super.onActivityResult(requestCode, resultCode, data);
-        Uri uri = Uri.parse(currentPath);
-        switch (requestCode) {
-            case REQUEST_IMAGE_CAPTURE:
-                if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
-                    try {
-                        photoBitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), uri);
-                        imageView.setImageBitmap(photoBitmap);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
+        if(resultCode == RESULT_OK)
+        {
+            switch (requestCode)
+            {
+                case REQUEST_IMAGE_CAPTURE:
+                    Log.d(TAG,"LOAD TAKEN PHOTO INTO IMAGEVIEW");
+                    Uri uri = data.getData();
+                    Glide.with(this).load(uri).into(imageView);
+                    currentPath = uri.toString();
+            }
         }
     }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        switch (requestCode) {
+            case REQUEST_IMAGE_CAPTURE: {
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                {
+                    // permission was granted
+                    Log.d(TAG, "PERMISSIONS GRANTED");
+             //       capturePhoto();
+
+                }
+                else
+                    {
+                    // permission denied
+                    Log.d(TAG, "PERMISSIONS DENIED");
+                    }
+                return;
+            }
+        }
+    }
 }
+
+
+*/
